@@ -16,7 +16,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     steps:
       - name: Recuperer le code
         uses: actions/checkout@v4
@@ -33,6 +34,25 @@ jobs:
         working-directory: apps/solidcraft-web
         run: trunk build --release --public-url ./
 
+      - name: Diagnostiquer la compilation
+        run: |
+          echo "=== Dossiers dist ==="
+          find . -type d -name dist -print
+
+          echo "=== Fichiers WebAssembly ==="
+          find . -type f -name "*.wasm" -print
+
+          echo "=== Contenu application Web ==="
+          ls -lah apps/solidcraft-web/
+
+          echo "=== Dossier attendu ==="
+          if [ -d apps/solidcraft-web/dist ]; then
+            ls -lah apps/solidcraft-web/dist/
+          else
+            echo "ERREUR : dossier dist introuvable"
+            exit 1
+          fi
+
       - name: Configurer Pages
         uses: actions/configure-pages@v5
 
@@ -43,10 +63,12 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Publier
         id: deployment
