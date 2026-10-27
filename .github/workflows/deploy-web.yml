@@ -1,0 +1,54 @@
+name: Publier Solidcraft Web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Installer Trunk
+        run: cargo install trunk --locked
+
+      - name: Compiler Solidcraft Web
+        working-directory: apps/solidcraft-web
+        run: trunk build --release --public-url ./
+
+      - name: Configurer Pages
+        uses: actions/configure-pages@v5
+
+      - name: Preparer les fichiers
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/solidcraft-web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publier
+        id: deployment
+        uses: actions/deploy-pages@v4
+  
