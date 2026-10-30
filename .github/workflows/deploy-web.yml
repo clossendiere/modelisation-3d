@@ -45,21 +45,31 @@ jobs:
           echo "=== Contenu application Web ==="
           ls -lah apps/solidcraft-web/
 
-          echo "=== Contenu du dossier dist ==="
-          if [ -d dist ]; then
-            ls -lah dist/
+          echo "=== Contenu du dossier dist/web ==="
+          if [ -d dist/web ]; then
+            ls -lah dist/web/
           else
-            echo "ERREUR : dossier dist introuvable"
+            echo "ERREUR : dossier dist/web introuvable"
             exit 1
           fi
 
-          echo "=== Recherche de index.html ==="
-          find dist -name "index.html" -print
-
-          if [ ! -f dist/index.html ]; then
-            echo "ERREUR : dist/index.html introuvable"
+          echo "=== Verification de index.html ==="
+          if [ -f dist/web/index.html ]; then
+            echo "OK : dist/web/index.html trouve"
+          else
+            echo "ERREUR : dist/web/index.html introuvable"
             exit 1
           fi
+
+          echo "=== Verification WebAssembly ==="
+          if find dist/web -type f -name "*.wasm" | grep -q .; then
+            echo "OK : fichier WebAssembly trouve"
+          else
+            echo "ERREUR : aucun fichier WebAssembly"
+            exit 1
+          fi
+
+          echo "=== Compilation validee ==="
 
       - name: Configurer Pages
         uses: actions/configure-pages@v5
@@ -76,6 +86,11 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publier sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
     steps:
       - name: Publier
