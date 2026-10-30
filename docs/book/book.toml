@@ -1,6 +1,6 @@
 [book]
 title = "Dessins 2D et Modélisation 3D pour métallerie et tôlerie"
-description = "Tutoriels"
+description = "Tutoriels dessin et modélisation pour métallerie tôlerie"
 authors = ["SolidCraft contributors"]
 language = "fr"
 src = "src"
