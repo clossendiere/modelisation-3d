@@ -67,7 +67,7 @@ jobs:
       - name: Preparer les fichiers
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: ./dist/web
 
   deploy:
     needs: build
