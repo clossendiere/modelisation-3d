@@ -6,8 +6,17 @@ name: Pages
 on:
   push:
     branches: [main]
-    # The site is the book and the web app: test data and the GitHub bots' scripts change neither.
-    paths-ignore: ["tests/**", "scripts/claim/**", "scripts/triage/**"]
+    paths:
+      - "docs/book/**"
+      - "apps/solidcraft-web/**"
+      - "crates/**"
+      - "assets/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "xtask/**"
+      - "packaging/flatpak-site.sh"
+      - ".github/workflows/pages.yml"
+
   workflow_dispatch:
     inputs:
       release_tag:
