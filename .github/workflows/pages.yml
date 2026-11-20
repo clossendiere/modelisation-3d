@@ -68,13 +68,15 @@ jobs:
       - name: Build the web app
         working-directory: apps/solidcraft-web
         run: trunk build --release --public-url ./
-        - name: Conserver l'application web compilée
+
+      - name: Conserver l'application web compilée
         uses: actions/upload-artifact@v4
         with:
           name: solidcraft-web-dist
           path: dist/web/
           retention-days: 30
           if-no-files-found: error
+
       - name: Test the web app offline and across an update (headless Chrome)
         run: cargo xtask web-offline-test --site dist/web
       - name: Assemble the site
