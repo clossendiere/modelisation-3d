@@ -27,15 +27,44 @@ jobs:
       - name: Construire mdBook
         run: mdbook build docs/book
 
-      - name: Verifier la documentation
+      - name: Recuperer le dernier site Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          test -f target/book/index.html
-          echo "Documentation mdBook construite."
+          RUN_ID=$(gh run list \
+            --workflow=pages.yml \
+            --branch=main \
+            --status=success \
+            --limit=1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
 
-      - name: Conserver la documentation
+          if [ -z "$RUN_ID" ]; then
+            echo "Aucune execution Pages reussie."
+            exit 1
+          fi
+
+          echo "Execution Pages : $RUN_ID"
+
+          mkdir -p previous-site
+          gh run download "$RUN_ID" \
+            --name github-pages \
+            --dir previous-site
+
+      - name: Examiner l'archive Pages
+        run: |
+          echo "=== Fichiers telecharges ==="
+          ls -lah previous-site/
+
+          echo "=== Types de fichiers ==="
+          file previous-site/*
+
+          echo "=== Contenu de l'archive ==="
+          find previous-site -maxdepth 2 -type f
+
+      - name: Conserver le diagnostic
         uses: actions/upload-artifact@v4
         with:
-          name: mdbook-html
-          path: target/book/
+          name: diagnostic-pages
+          path: previous-site/
           retention-days: 7
-          if-no-files-found: error
