@@ -85,3 +85,16 @@ jobs:
 
           echo "=== Taille du site ==="
           du -sh extracted-site/
+
+      - name: Rechercher les fichiers Flatpak
+        run: |
+          echo "=== Dossiers Flatpak et OSTree ==="
+          find extracted-site -maxdepth 5 \
+            \( -iname "*flatpak*" \
+            -o -name "objects" \
+            -o -name "refs" \
+            -o -name "summary*" \) -print
+
+          echo "=== Dossiers principaux ==="
+          du -h --max-depth=2 extracted-site \
+            | sort -h | tail -20
