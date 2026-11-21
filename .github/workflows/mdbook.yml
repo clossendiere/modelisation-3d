@@ -25,7 +25,9 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Construire mdBook
-        run: mdbook build docs/book
+        run: |
+          mdbook build docs/book
+          test -f target/book/index.html
 
       - name: Recuperer le dernier site Pages
         env:
@@ -40,61 +42,89 @@ jobs:
             --jq '.[0].databaseId')
 
           if [ -z "$RUN_ID" ]; then
-            echo "Aucune execution Pages reussie."
+            echo "ERREUR : aucune execution Pages reussie"
             exit 1
           fi
 
           echo "Execution Pages : $RUN_ID"
 
           mkdir -p previous-site
+
           gh run download "$RUN_ID" \
             --name github-pages \
             --dir previous-site
 
-      - name: Examiner l'archive Pages
+      - name: Extraire le site existant
         run: |
-          echo "=== Archive Pages ==="
-          ls -lh previous-site/artifact.tar
-
-          echo "=== Extraire le site ==="
           mkdir -p extracted-site
-          tar -xf previous-site/artifact.tar -C extracted-site
 
-          echo "=== Contenu principal ==="
-          ls -lah extracted-site/
+          tar -xf previous-site/artifact.tar \
+            -C extracted-site
 
-          echo "=== Documentation mdBook ==="
-          if [ -f extracted-site/index.html ]; then
-            echo "OK : documentation presente"
-          else
-            echo "ATTENTION : index.html absent"
-          fi
+          test -f extracted-site/index.html
+          test -f extracted-site/app/index.html
 
-          echo "=== Application SolidCraft ==="
-          if [ -f extracted-site/app/index.html ]; then
-            echo "OK : application presente"
-          else
-            echo "ATTENTION : application absente"
-          fi
+          echo "Site existant extrait avec succes"
 
-          echo "=== Fichiers Flatpak ==="
-          find extracted-site -maxdepth 4 \
-            \( -name "*.flatpakref" \
-            -o -name "*.flatpakrepo" \
-            -o -name "summary" \) -print
-
-          echo "=== Taille du site ==="
-          du -sh extracted-site/
-
-      - name: Rechercher les fichiers Flatpak
+      - name: Assembler le nouveau site
         run: |
-          echo "=== Dossiers Flatpak et OSTree ==="
-          find extracted-site -maxdepth 5 \
-            \( -iname "*flatpak*" \
-            -o -name "objects" \
-            -o -name "refs" \
-            -o -name "summary*" \) -print
+          echo "=== Nouvelle documentation ==="
 
-          echo "=== Dossiers principaux ==="
-          du -h --max-depth=2 extracted-site \
-            | sort -h | tail -20
+          mkdir -p site
+          cp -a target/book/. site/
+
+          echo "=== Preparation SEO ==="
+          bash docs/book/seo.sh site
+
+          echo "=== Recuperation de SolidCraft ==="
+          cp -a extracted-site/app site/app
+
+          echo "=== Configuration GitHub Pages ==="
+          if [ -f extracted-site/.nojekyll ]; then
+            cp -a extracted-site/.nojekyll site/
+          else
+            touch site/.nojekyll
+          fi
+
+          echo "=== Site assemble ==="
+          ls -lah site/
+
+      - name: Verifier le nouveau site
+        run: |
+          echo "=== Documentation ==="
+          test -f site/index.html
+          echo "OK : documentation presente"
+
+          echo "=== Application ==="
+          test -f site/app/index.html
+          echo "OK : application presente"
+
+          echo "=== WebAssembly ==="
+          WASM=$(find site/app -type f \
+            -name "*.wasm" -print -quit)
+
+          if [ -z "$WASM" ]; then
+            echo "ERREUR : WebAssembly introuvable"
+            exit 1
+          fi
+
+          echo "OK : $WASM"
+
+          echo "=== GitHub Pages ==="
+          test -f site/.nojekyll
+          echo "OK : .nojekyll present"
+
+          echo "=== Tailles ==="
+          du -sh site/
+          du -sh site/app/
+
+          echo "=== Verification terminee ==="
+
+      - name: Conserver le site pour verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-mdbook-test
+          path: site/
+          include-hidden-files: true
+          retention-days: 2
+          if-no-files-found: error
