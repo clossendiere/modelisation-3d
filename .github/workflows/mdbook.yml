@@ -1,16 +1,33 @@
+# Publication rapide de la documentation SolidCraft.
+# Reutilise l'application WebAssembly deja compilee.
+# Aucune compilation Rust ou Trunk.
+
 name: Preparer mdBook
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/book/**"
+      - ".github/workflows/mdbook.yml"
+
   workflow_dispatch:
 
 permissions:
   contents: read
   actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Recuperer les sources
@@ -18,21 +35,32 @@ jobs:
 
       - name: Installer mdBook
         run: |
+          set -euo pipefail
+
           mkdir -p "$HOME/.local/bin"
+
           curl -fsSL \
             "https://github.com/rust-lang/mdBook/releases/download/v0.5.4/mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz" \
             | tar -xz -C "$HOME/.local/bin"
+
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Construire mdBook
         run: |
+          set -euo pipefail
+
           mdbook build docs/book
+
           test -f target/book/index.html
 
-      - name: Recuperer le dernier site Pages
+          echo "Documentation construite avec succes"
+
+      - name: Recuperer le dernier site complet
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+
           RUN_ID=$(gh run list \
             --workflow=pages.yml \
             --branch=main \
@@ -42,7 +70,7 @@ jobs:
             --jq '.[0].databaseId')
 
           if [ -z "$RUN_ID" ]; then
-            echo "ERREUR : aucune execution Pages reussie"
+            echo "ERREUR : aucune compilation Pages reussie"
             exit 1
           fi
 
@@ -54,8 +82,12 @@ jobs:
             --name github-pages \
             --dir previous-site
 
+          test -f previous-site/artifact.tar
+
       - name: Extraire le site existant
         run: |
+          set -euo pipefail
+
           mkdir -p extracted-site
 
           tar -xf previous-site/artifact.tar \
@@ -64,22 +96,27 @@ jobs:
           test -f extracted-site/index.html
           test -f extracted-site/app/index.html
 
-          echo "Site existant extrait avec succes"
+          echo "Site existant recupere"
 
       - name: Assembler le nouveau site
         run: |
+          set -euo pipefail
+
           echo "=== Nouvelle documentation ==="
 
           mkdir -p site
           cp -a target/book/. site/
 
           echo "=== Preparation SEO ==="
+
           bash docs/book/seo.sh site
 
-          echo "=== Recuperation de SolidCraft ==="
+          echo "=== Application SolidCraft existante ==="
+
           cp -a extracted-site/app site/app
 
           echo "=== Configuration GitHub Pages ==="
+
           if [ -f extracted-site/.nojekyll ]; then
             cp -a extracted-site/.nojekyll site/
           else
@@ -87,75 +124,67 @@ jobs:
           fi
 
           echo "=== Site assemble ==="
-          ls -lah site/
 
-      - name: Verifier le nouveau site
+          du -sh site/
+          du -sh site/app/
+
+      - name: Verifier le site
         run: |
+          set -euo pipefail
+
           echo "=== Documentation ==="
           test -f site/index.html
-          echo "OK : documentation presente"
+          echo "OK : documentation"
 
-          echo "=== Application ==="
+          echo "=== Application SolidCraft ==="
           test -f site/app/index.html
-          echo "OK : application presente"
+          echo "OK : application"
 
           echo "=== WebAssembly ==="
+
           WASM=$(find site/app -type f \
             -name "*.wasm" -print -quit)
 
           if [ -z "$WASM" ]; then
-            echo "ERREUR : WebAssembly introuvable"
+            echo "ERREUR : WebAssembly absent"
             exit 1
           fi
 
           echo "OK : $WASM"
 
+          echo "=== Application identique ==="
+
+          diff -qr extracted-site/app site/app
+
+          echo "OK : application inchangee"
+
           echo "=== GitHub Pages ==="
+
           test -f site/.nojekyll
-          echo "OK : .nojekyll present"
 
-          echo "=== Tailles ==="
+          echo "OK : .nojekyll"
+
+          echo "=== Taille totale ==="
+
           du -sh site/
-          du -sh site/app/
 
-          echo "=== Verification terminee ==="
+      - name: Configurer GitHub Pages
+        uses: actions/configure-pages@v5
 
-      - name: Comparer ancien et nouveau site
-        run: |
-          echo "=== Fichiers absents du nouveau site ==="
-
-          find extracted-site -type f \
-            | sed 's#^extracted-site/##' \
-            | sort > /tmp/ancien.txt
-
-          find site -type f \
-            | sed 's#^site/##' \
-            | sort > /tmp/nouveau.txt
-
-          comm -23 /tmp/ancien.txt /tmp/nouveau.txt \
-            > /tmp/fichiers-absents.txt
-
-          echo "=== Nombre de fichiers absents ==="
-          wc -l /tmp/fichiers-absents.txt
-
-          echo "=== Liste des fichiers absents ==="
-          cat /tmp/fichiers-absents.txt
-
-          echo "=== Fichiers ajoutes ==="
-          comm -13 /tmp/ancien.txt /tmp/nouveau.txt
-
-          echo "=== Verification de l'application ==="
-          diff -qr extracted-site/app site/app \
-            && echo "OK : application identique"
-
-          echo "=== Tailles ==="
-          du -sh extracted-site site
-
-      - name: Conserver le site pour verification
-        uses: actions/upload-artifact@v4
+      - name: Preparer l'archive GitHub Pages
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: site-mdbook-test
-          path: site/
-          include-hidden-files: true
-          retention-days: 2
-          if-no-files-found: error
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publier la documentation
+        id: deployment
+        uses: actions/deploy-pages@v4
