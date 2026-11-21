@@ -801,7 +801,6 @@ fn start_content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<File
     let open_hint = crate::i18n::format("home.open_hint", &[("shortcut", shortcut)]);
     let tiles = [
         ("home:new_mm", "new", app.tr("home.new_mm"), app.tr("home.new_mm_hint"), true),
-        ("home:new_inches", "new", app.tr("home.new_inches"), app.tr("home.new_inches_hint"), false),
         ("home:open_tile", "open", app.tr("home.open"), open_hint.as_str(), false),
         ("home:import", "import", app.tr("home.import"), app.tr("home.import_hint"), false),
     ];
