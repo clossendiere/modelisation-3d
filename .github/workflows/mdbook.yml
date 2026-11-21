@@ -120,6 +120,37 @@ jobs:
 
           echo "=== Verification terminee ==="
 
+      - name: Comparer ancien et nouveau site
+        run: |
+          echo "=== Fichiers absents du nouveau site ==="
+
+          find extracted-site -type f \
+            | sed 's#^extracted-site/##' \
+            | sort > /tmp/ancien.txt
+
+          find site -type f \
+            | sed 's#^site/##' \
+            | sort > /tmp/nouveau.txt
+
+          comm -23 /tmp/ancien.txt /tmp/nouveau.txt \
+            > /tmp/fichiers-absents.txt
+
+          echo "=== Nombre de fichiers absents ==="
+          wc -l /tmp/fichiers-absents.txt
+
+          echo "=== Liste des fichiers absents ==="
+          cat /tmp/fichiers-absents.txt
+
+          echo "=== Fichiers ajoutes ==="
+          comm -13 /tmp/ancien.txt /tmp/nouveau.txt
+
+          echo "=== Verification de l'application ==="
+          diff -qr extracted-site/app site/app \
+            && echo "OK : application identique"
+
+          echo "=== Tailles ==="
+          du -sh extracted-site site
+
       - name: Conserver le site pour verification
         uses: actions/upload-artifact@v4
         with:
@@ -127,4 +158,4 @@ jobs:
           path: site/
           include-hidden-files: true
           retention-days: 2
-          if-no-files-found: error 
+          if-no-files-found: error
