@@ -1,0 +1,190 @@
+# Publication rapide de la documentation SolidCraft.
+# Reutilise l'application WebAssembly deja compilee.
+# Aucune compilation Rust ou Trunk.
+
+name: Preparer mdBook
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/book/**"
+      - ".github/workflows/mdbook.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Recuperer les sources
+        uses: actions/checkout@v4
+
+      - name: Installer mdBook
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.local/bin"
+
+          curl -fsSL \
+            "https://github.com/rust-lang/mdBook/releases/download/v0.5.4/mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Construire mdBook
+        run: |
+          set -euo pipefail
+
+          mdbook build docs/book
+
+          test -f target/book/index.html
+
+          echo "Documentation construite avec succes"
+
+      - name: Recuperer le dernier site complet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          RUN_ID=$(gh run list \
+            --workflow=pages.yml \
+            --branch=main \
+            --status=success \
+            --limit=1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+
+          if [ -z "$RUN_ID" ]; then
+            echo "ERREUR : aucune compilation Pages reussie"
+            exit 1
+          fi
+
+          echo "Execution Pages : $RUN_ID"
+
+          mkdir -p previous-site
+
+          gh run download "$RUN_ID" \
+            --name github-pages \
+            --dir previous-site
+
+          test -f previous-site/artifact.tar
+
+      - name: Extraire le site existant
+        run: |
+          set -euo pipefail
+
+          mkdir -p extracted-site
+
+          tar -xf previous-site/artifact.tar \
+            -C extracted-site
+
+          test -f extracted-site/index.html
+          test -f extracted-site/app/index.html
+
+          echo "Site existant recupere"
+
+      - name: Assembler le nouveau site
+        run: |
+          set -euo pipefail
+
+          echo "=== Nouvelle documentation ==="
+
+          mkdir -p site
+          cp -a target/book/. site/
+
+          echo "=== Preparation SEO ==="
+
+          bash docs/book/seo.sh site
+
+          echo "=== Application SolidCraft existante ==="
+
+          cp -a extracted-site/app site/app
+
+          echo "=== Configuration GitHub Pages ==="
+
+          if [ -f extracted-site/.nojekyll ]; then
+            cp -a extracted-site/.nojekyll site/
+          else
+            touch site/.nojekyll
+          fi
+
+          echo "=== Site assemble ==="
+
+          du -sh site/
+          du -sh site/app/
+
+      - name: Verifier le site
+        run: |
+          set -euo pipefail
+
+          echo "=== Documentation ==="
+          test -f site/index.html
+          echo "OK : documentation"
+
+          echo "=== Application SolidCraft ==="
+          test -f site/app/index.html
+          echo "OK : application"
+
+          echo "=== WebAssembly ==="
+
+          WASM=$(find site/app -type f \
+            -name "*.wasm" -print -quit)
+
+          if [ -z "$WASM" ]; then
+            echo "ERREUR : WebAssembly absent"
+            exit 1
+          fi
+
+          echo "OK : $WASM"
+
+          echo "=== Application identique ==="
+
+          diff -qr extracted-site/app site/app
+
+          echo "OK : application inchangee"
+
+          echo "=== GitHub Pages ==="
+
+          test -f site/.nojekyll
+
+          echo "OK : .nojekyll"
+
+          echo "=== Taille totale ==="
+
+          du -sh site/
+
+      - name: Configurer GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Preparer l'archive GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publier la documentation
+        id: deployment
+        uses: actions/deploy-pages@v4
