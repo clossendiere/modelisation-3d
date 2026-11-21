@@ -53,18 +53,35 @@ jobs:
 
       - name: Examiner l'archive Pages
         run: |
-          echo "=== Fichiers telecharges ==="
-          ls -lah previous-site/
+          echo "=== Archive Pages ==="
+          ls -lh previous-site/artifact.tar
 
-          echo "=== Types de fichiers ==="
-          file previous-site/*
+          echo "=== Extraire le site ==="
+          mkdir -p extracted-site
+          tar -xf previous-site/artifact.tar -C extracted-site
 
-          echo "=== Contenu de l'archive ==="
-          find previous-site -maxdepth 2 -type f
+          echo "=== Contenu principal ==="
+          ls -lah extracted-site/
 
-      - name: Conserver le diagnostic
-        uses: actions/upload-artifact@v4
-        with:
-          name: diagnostic-pages
-          path: previous-site/
-          retention-days: 7
+          echo "=== Documentation mdBook ==="
+          if [ -f extracted-site/index.html ]; then
+            echo "OK : documentation presente"
+          else
+            echo "ATTENTION : index.html absent"
+          fi
+
+          echo "=== Application SolidCraft ==="
+          if [ -f extracted-site/app/index.html ]; then
+            echo "OK : application presente"
+          else
+            echo "ATTENTION : application absente"
+          fi
+
+          echo "=== Fichiers Flatpak ==="
+          find extracted-site -maxdepth 4 \
+            \( -name "*.flatpakref" \
+            -o -name "*.flatpakrepo" \
+            -o -name "summary" \) -print
+
+          echo "=== Taille du site ==="
+          du -sh extracted-site/
