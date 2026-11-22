@@ -322,7 +322,7 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
         });
 
         let levels = [
-            "Débutant",
+            "Débutant (dessin 2D)",
             "Intermédiaire",
             "Avancé",
             "Expert",
