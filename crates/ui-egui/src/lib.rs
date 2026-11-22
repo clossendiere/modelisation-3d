@@ -425,8 +425,6 @@ pub struct PreSketchView {
 }
 
 pub struct SolveApp {
-    /// Niveau pédagogique : 0 = Débutant, 1 = Intermédiaire, 2 = Avancé, 3 = Expert.
-    pub pedagogical_level: usize,
     /// Compact browser embed: retain model panels and joint controls without application chrome.
     pub embedded: bool,
     pub session: Session,
@@ -653,7 +651,6 @@ impl SolveApp {
         #[cfg(not(target_arch = "wasm32"))]
         solidcraft_engine::slicer_files::clean_old();
         let mut app = SolveApp {
-            pedagogical_level: 3,
             session,
             ui: UiState::default(),
             shell: Default::default(),
